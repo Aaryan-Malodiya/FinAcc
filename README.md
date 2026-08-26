@@ -126,7 +126,6 @@ Some of the important feature groups in the dataset include:
 
 The transaction and identity tables are joined using `TransactionID`.
 
-> **Note:** The IEEE-CIS Fraud Detection dataset is used for training and evaluation. The original dataset should not be uploaded to the repository unless its redistribution terms allow it.
 
 ## Technology Stack
 
