@@ -85,7 +85,7 @@ class LedgerEntry(Base):
     )
 
     status = Column(
-        Enum("pending_approval", "posted", "flagged", "rejected"),
+        Enum("pending", "posted", "flagged", "rejected"),
         default="posted",
         nullable=False,
     )
@@ -165,11 +165,19 @@ class Transaction(Base):
         ForeignKey("accounts.account_code"),
     )
 
+    merchant = Column(String(255))
     counterparty = Column(String(255))
     channel = Column(String(60))
     country = Column(String(2))
     device_type = Column(String(60))
     device_info = Column(String(255))
+
+    risk_score = Column(Integer)
+    risk_level = Column(
+        Enum("clean", "watch", "high"),
+        default="clean",
+        nullable=False,
+    )
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -238,7 +246,7 @@ class RiskScore(Base):
     score = Column(Integer, nullable=False)
 
     risk_tier = Column(
-        Enum("clean", "watch", "high_risk"),
+        Enum("clean", "watch", "high"),
         nullable=False,
     )
 
