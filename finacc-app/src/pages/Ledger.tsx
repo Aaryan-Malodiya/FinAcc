@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Search } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Panel } from '../components/ui/Panel'
 import { RiskPill, StatusPill } from '../components/ui/RiskPill'
+import { TimeRangeFilter } from '../components/ui/TimeRangeFilter'
 import { transactions } from '../data/transactions'
 import { formatCurrency } from '../utils/format'
 import type { Transaction } from '../types/finance'
@@ -11,6 +12,7 @@ type SortKey = 'id' | 'date' | 'amount' | 'riskScore'
 type Dir = 'asc' | 'desc'
 
 const statusFilters = ['all', 'posted', 'pending', 'flagged'] as const
+const referenceDate = new Date(Math.max(...transactions.map((t) => new Date(t.date).getTime())))
 
 const columns: { key: SortKey | null; label: string; align?: 'right' }[] = [
   { key: 'id', label: 'Entry' },
@@ -27,17 +29,22 @@ export function Ledger() {
   const [dir, setDir] = useState<Dir>('desc')
   const [status, setStatus] = useState<(typeof statusFilters)[number]>('all')
   const [query, setQuery] = useState('')
+  const [range, setRange] = useState('30d')
+  const rangeDays = { '30d': 30, '60d': 60, '90d': 90 }[range] ?? 30
 
   const rows = useMemo(() => {
+    const cutoff = new Date(referenceDate)
+    cutoff.setDate(cutoff.getDate() - rangeDays)
     const filtered = transactions.filter((t) => {
       const matchesStatus = status === 'all' || t.status === status
+      const matchesRange = new Date(t.date) >= cutoff
       const q = query.trim().toLowerCase()
       const matchesQuery =
         !q ||
         t.id.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
         t.account.toLowerCase().includes(q)
-      return matchesStatus && matchesQuery
+      return matchesStatus && matchesRange && matchesQuery
     })
     return filtered.sort((a: Transaction, b: Transaction) => {
       const av = a[sortKey]
@@ -47,7 +54,7 @@ export function Ledger() {
         : String(av).localeCompare(String(bv))
       return dir === 'asc' ? cmp : -cmp
     })
-  }, [sortKey, dir, status, query])
+  }, [sortKey, dir, status, query, rangeDays])
 
   const total = rows.reduce((sum, t) => sum + t.amount, 0)
 
@@ -69,7 +76,7 @@ export function Ledger() {
 
       <Panel bodyClassName="px-0 py-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-paper-border px-5 py-3.5">
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {statusFilters.map((s) => (
               <button
                 key={s}
@@ -84,6 +91,7 @@ export function Ledger() {
                 {s === 'all' ? 'All entries' : s}
               </button>
             ))}
+            <TimeRangeFilter value={range} onChange={setRange} />
           </div>
           <div className="relative">
             <Search

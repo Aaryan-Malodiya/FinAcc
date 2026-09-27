@@ -9,6 +9,7 @@ import {
   YAxis
 } from 'recharts'
 import { riskTrend } from '../../data/riskReport'
+import type { TrendPoint } from '../../types/finance'
 
 const series = [
   { key: 'clean', label: 'Clean', color: '#5C7A6E' },
@@ -43,11 +44,11 @@ function TrendTooltip({ active, payload, label }: any) {
   )
 }
 
-export function RiskTrendChart() {
+export function RiskTrendChart({ data = riskTrend }: { data?: TrendPoint[] }) {
   return (
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={riskTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
           <defs>
             {series.map((s) => (
               <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">

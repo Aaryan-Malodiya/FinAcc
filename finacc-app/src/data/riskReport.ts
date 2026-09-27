@@ -232,24 +232,20 @@ export const activityFeed: ActivityEntry[] = [
   }
 ]
 
-function buildTrend(): TrendPoint[] {
-  const base = [
-    [412, 38, 6], [398, 41, 4], [430, 36, 9], [455, 52, 12], [441, 47, 7],
-    [389, 33, 5], [356, 29, 3], [472, 58, 14], [488, 61, 18], [463, 55, 11],
-    [421, 44, 8], [409, 39, 6], [377, 31, 4], [498, 66, 21], [512, 71, 24],
-    [486, 62, 16], [451, 49, 10], [438, 45, 9], [396, 35, 5], [521, 74, 27],
-    [534, 79, 31], [509, 68, 22], [477, 57, 15], [462, 51, 12], [418, 42, 8],
-    [545, 83, 34], [561, 88, 39], [538, 76, 29], [502, 64, 19], [576, 94, 42]
-  ]
-  return base.map(([clean, watch, high], i) => {
-    const d = new Date(2026, 6, 9 + i)
-    return {
+function buildTrend(days = 90): TrendPoint[] {
+  const points: TrendPoint[] = []
+  for (let i = 0; i < days; i++) {
+    const wave = Math.sin(i / 5) * 40 + Math.sin(i / 13) * 25
+    const drift = i * 1.8
+    const d = new Date(2026, 4, 10 + i)
+    points.push({
       day: `${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}`,
-      clean,
-      watch,
-      high
-    }
-  })
+      clean: Math.round(380 + wave + drift * 0.9),
+      watch: Math.round(32 + wave * 0.35 + drift * 0.22),
+      high: Math.round(4 + Math.max(0, wave * 0.18) + drift * 0.11)
+    })
+  }
+  return points
 }
 
-export const riskTrend: TrendPoint[] = buildTrend()
+export const riskTrend: TrendPoint[] = buildTrend(90)

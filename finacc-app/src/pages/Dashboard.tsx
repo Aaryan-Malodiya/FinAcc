@@ -1,12 +1,13 @@
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Panel } from '../components/ui/Panel'
 import { MetricCard } from '../components/ui/MetricCard'
 import { RiskPill } from '../components/ui/RiskPill'
+import { TimeRangeFilter } from '../components/ui/TimeRangeFilter'
 import { RiskTrendChart } from '../components/charts/RiskTrendChart'
-import { activityFeed, batchSummary } from '../data/riskReport'
+import { activityFeed, batchSummary, riskTrend } from '../data/riskReport'
 import { transactions } from '../data/transactions'
 import { formatCurrency } from '../utils/format'
 
@@ -18,6 +19,9 @@ const toneMap: Record<string, string> = {
 }
 
 export function Dashboard() {
+  const [range, setRange] = useState('30d')
+  const rangeDays = { '30d': 30, '60d': 60, '90d': 90 }[range] ?? 30
+  const trendData = useMemo(() => riskTrend.slice(-rangeDays), [rangeDays])
   const flaggedAmount = batchSummary.flaggedAmount
   return (
     <>
@@ -65,15 +69,11 @@ export function Dashboard() {
       <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
         <Panel
           className="xl:col-span-2"
-          eyebrow="Last 30 days"
+          eyebrow={`Last ${rangeDays} days`}
           title="Risk distribution over time"
-          action={
-            <span className="font-mono text-[11px] text-paper-muted">
-              scored entries / day
-            </span>
-          }
+          action={<TimeRangeFilter value={range} onChange={setRange} />}
         >
-          <RiskTrendChart />
+          <RiskTrendChart data={trendData} />
         </Panel>
 
         <Panel eyebrow="Audit trail" title="Recent activity" bodyClassName="px-0 py-0">
