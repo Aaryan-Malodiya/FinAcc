@@ -1,6 +1,7 @@
 import React from 'react'
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { riskDistribution } from '../../data/riskReport'
+import type { RiskDistributionBand } from '../../types/finance'
 import { riskHex } from '../../utils/format'
 
 function DistTooltip({ active, payload, label }: any) {
@@ -17,11 +18,11 @@ function DistTooltip({ active, payload, label }: any) {
   )
 }
 
-export function RiskDistributionChart() {
+export function RiskDistributionChart({ data = riskDistribution }: { data?: RiskDistributionBand[] }) {
   return (
     <div className="h-[240px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={riskDistribution} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+        <BarChart data={data} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
           <XAxis
             dataKey="band"
             tick={{ fill: '#6E6656', fontSize: 10, fontFamily: 'IBM Plex Mono' }}
@@ -36,7 +37,7 @@ export function RiskDistributionChart() {
           />
           <Tooltip content={<DistTooltip />} cursor={{ fill: 'rgba(232,163,61,0.12)' }} />
           <Bar dataKey="count" radius={[2, 2, 0, 0]} maxBarSize={54}>
-            {riskDistribution.map((d) => (
+            {data.map((d) => (
               <Cell key={d.band} fill={riskHex[d.level].fg} />
             ))}
           </Bar>

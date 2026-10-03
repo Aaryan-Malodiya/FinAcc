@@ -6,9 +6,10 @@ import { MetricCard } from '../components/ui/MetricCard'
 import { RiskPill } from '../components/ui/RiskPill'
 import { Button } from '../components/ui/Button'
 import { RiskDistributionChart } from '../components/charts/RiskDistributionChart'
-import { batchSummary, flaggedTransactions } from '../data/riskReport'
+import { batchSummary, flaggedTransactions, riskDistribution } from '../data/riskReport'
 import { formatCurrency } from '../utils/format'
-import type { RiskLevel } from '../types/finance'
+import { latestRiskReportKey } from '../api/fraud'
+import type { RiskLevel, ScoredBatchReport } from '../types/finance'
 
 type SortKey = 'riskScore' | 'amount' | 'date' | 'id'
 type Dir = 'asc' | 'desc'
@@ -18,21 +19,33 @@ const levelFilters: (RiskLevel | 'all')[] = ['all', 'high', 'watch', 'clean']
 const columns: { key: SortKey | null; label: string; align?: 'right' }[] = [
   { key: 'id', label: 'Entry' },
   { key: 'date', label: 'Timestamp' },
-  { key: null, label: 'Counterparty' },
-  { key: null, label: 'Channel' },
+  { key: null, label: 'Counterparty / product' },
+  { key: null, label: 'Channel / card type' },
   { key: 'amount', label: 'Amount', align: 'right' },
   { key: 'riskScore', label: 'Risk score', align: 'right' },
   { key: null, label: 'Verdict', align: 'right' }
 ]
 
 export function RiskReport() {
+  const [liveReport] = useState<ScoredBatchReport | null>(() => {
+    const saved = sessionStorage.getItem(latestRiskReportKey)
+    if (!saved) return null
+    try {
+      return JSON.parse(saved) as ScoredBatchReport
+    } catch {
+      return null
+    }
+  })
+  const summary = liveReport?.summary ?? batchSummary
+  const transactions = liveReport?.flaggedTransactions ?? flaggedTransactions
+  const distribution = liveReport?.riskDistribution ?? riskDistribution
   const [sortKey, setSortKey] = useState<SortKey>('riskScore')
   const [dir, setDir] = useState<Dir>('desc')
   const [level, setLevel] = useState<RiskLevel | 'all'>('all')
-  const [expanded, setExpanded] = useState<string | null>(flaggedTransactions[0].id)
+  const [expanded, setExpanded] = useState<string | null>(transactions[0]?.id ?? null)
 
   const rows = useMemo(() => {
-    return flaggedTransactions
+    return transactions
       .filter((t) => level === 'all' || t.risk === level)
       .slice()
       .sort((a, b) => {
@@ -44,7 +57,13 @@ export function RiskReport() {
             : String(av).localeCompare(String(bv))
         return dir === 'asc' ? cmp : -cmp
       })
-  }, [sortKey, dir, level])
+  }, [sortKey, dir, level, transactions])
+
+  const disposition = (['high', 'watch', 'clean'] as const).map((risk) => ({
+    label: risk === 'high' ? 'High risk — escalate' : risk === 'watch' ? 'Watch — secondary review' : 'Clean — auto-cleared',
+    count: distribution.filter((band) => band.level === risk).reduce((sum, band) => sum + band.count, 0),
+    level: risk
+  }))
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) setDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -57,9 +76,9 @@ export function RiskReport() {
   return (
     <>
       <PageHeader
-        eyebrow={`${batchSummary.batchId} · ${batchSummary.modelVersion}`}
+        eyebrow={`${summary.batchId} · ${summary.modelVersion}`}
         title="Risk report"
-        description={`Scored ${batchSummary.scanned.toLocaleString()} rows from ${batchSummary.fileName} in ${batchSummary.runtimeSeconds}s. Completed ${batchSummary.completedAt}.`}
+        description={`Scored ${summary.scanned.toLocaleString()} rows from ${summary.fileName} in ${summary.runtimeSeconds}s. Completed ${summary.completedAt}.`}
         action={
           <Button variant="primary" type="button">
             <Download size={13} /> Export report
@@ -70,41 +89,41 @@ export function RiskReport() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total scanned"
-          value={batchSummary.scanned.toLocaleString()}
-          hint={`${batchSummary.fileName}`}
+          value={summary.scanned.toLocaleString()}
+          hint={`${summary.fileName}`}
         />
         <MetricCard
           label="Flagged"
-          value={batchSummary.flagged.toLocaleString()}
+          value={summary.flagged.toLocaleString()}
           hint="score ≥ 40 threshold"
           emphasis="risk"
         />
         <MetricCard
           label="Flagged exposure"
-          value={formatCurrency(batchSummary.flaggedAmount)}
+          value={formatCurrency(summary.flaggedAmount)}
           hint="held pending review"
           emphasis="brass"
         />
         <MetricCard
-          label="Model performance"
-          value={batchSummary.auc.toFixed(3)}
-          hint={`AUC · precision ${batchSummary.precision} · recall ${batchSummary.recall}`}
+          label={liveReport ? 'Fraud risk rate' : 'Model performance'}
+          value={liveReport
+            ? `${summary.scanned ? ((summary.flagged / summary.scanned) * 100).toFixed(1) : '0.0'}%`
+            : (summary.auc ?? 0).toFixed(3)}
+          hint={liveReport
+            ? `${summary.flagged.toLocaleString()} transactions scored 40 or higher`
+            : `AUC · precision ${summary.precision} · recall ${summary.recall}`}
           emphasis="brass"
         />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
         <Panel className="xl:col-span-2" eyebrow="Batch output" title="Risk score distribution">
-          <RiskDistributionChart />
+          <RiskDistributionChart data={distribution} />
         </Panel>
         <Panel tone="light" eyebrow="Disposition" title="Review queue">
           <ul className="space-y-4">
-            {[
-              { label: 'High risk — escalate', count: 264, level: 'high' as RiskLevel },
-              { label: 'Watch — secondary review', count: 1222, level: 'watch' as RiskLevel },
-              { label: 'Clean — auto-cleared', count: 16946, level: 'clean' as RiskLevel }
-            ].map((item) => {
-              const pct = (item.count / batchSummary.scanned) * 100
+            {disposition.map((item) => {
+              const pct = (item.count / Math.max(summary.scanned, 1)) * 100
               return (
                 <li key={item.label}>
                   <div className="flex items-baseline justify-between gap-3">
@@ -139,7 +158,7 @@ export function RiskReport() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-paper-border px-5 py-3.5">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper-muted">
-              Flagged transactions
+              {liveReport ? 'Top model scores' : 'Flagged transactions'}
             </p>
             <h2 className="font-display text-lg leading-tight text-paper-ink">
               Top scored entries
@@ -267,7 +286,7 @@ export function RiskReport() {
                           <div className="grid grid-cols-1 gap-5 rounded-sm border border-paper-border bg-paper px-5 py-4 lg:grid-cols-2">
                             <div>
                               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper-muted">
-                                Why it was flagged
+                                {liveReport ? 'Model evidence' : 'Why it was flagged'}
                               </p>
                               <ul className="mt-2.5 space-y-2">
                                 {t.reasons.map((reason) => (
@@ -333,8 +352,8 @@ export function RiskReport() {
 
         <div className="border-t border-paper-border bg-paper-light px-5 py-3">
           <p className="font-mono text-[11px] text-paper-muted">
-            Showing {rows.length} of {flaggedTransactions.length} sampled flags ·{' '}
-            {batchSummary.flagged.toLocaleString()} total in batch
+            Showing {rows.length} of {transactions.length} scored entries ·{' '}
+            {summary.flagged.toLocaleString()} flagged in {summary.scanned.toLocaleString()} total
           </p>
         </div>
       </Panel>

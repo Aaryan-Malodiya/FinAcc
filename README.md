@@ -215,8 +215,8 @@ FinAcc/
 
 ### Prerequisites
 
-- Node.js (version ______) and npm/yarn — for `finacc-app/`
-- Python (version ______) — for `Models/Scripts/`
+- Node.js and npm — for `finacc-app/`
+- Python — for the FastAPI service and model
 - A running instance of the chosen relational database
 
 ### Installation
@@ -230,29 +230,26 @@ cd FinAcc
 cd finacc-app
 npm install
 
-# Python/ML setup
-cd ../Models
-pip install -r ../requirements.txt
-```
-
-### Environment Variables
-
-_List required environment variables here once finalized (e.g. database connection string, API base URL)._
-
-```
-DATABASE_URL=
-API_BASE_URL=
+# Python/API setup (run from the repository root)
+python -m pip install -r requirements.txt
 ```
 
 ### Running Locally
 
+Start the API from the repository root:
+
 ```bash
-# Start the frontend
+python -m uvicorn backend.main:app --reload
+```
+
+Then start the frontend in another terminal:
+
+```bash
 cd finacc-app
 npm run dev
 ```
 
-_Add backend/API start command here once its location is confirmed (see Repository Structure note above)._
+The frontend proxies `/api` requests to `http://127.0.0.1:8000`. API health and interactive docs are available at `/api/health` and `/docs` on the API server.
 
 ### Running the Model Pipeline
 
@@ -266,19 +263,12 @@ python evaluate.py
 
 ## Transaction Upload Format
 
-The fraud detection system accepts transaction data in CSV or XLSX format.
+The fraud detection screen accepts IEEE-CIS transaction data in CSV format. The trained XGBoost artifact requires its complete 393-feature transaction schema, including fields such as:
 
-The expected fields include:
+- `TransactionID`, `TransactionDT`, `TransactionAmt`, and `ProductCD`
+- Card, address, distance, email, count, day, and `V`-series features from the IEEE-CIS transaction table
 
-- `transaction_id`
-- `posted_at`
-- `amount`
-- `account_code`
-- `counterparty`
-- `channel`
-- `country`
-
-The uploaded file is checked before it is processed. If required columns are missing or the file format is incorrect, the system should show an appropriate error.
+An optional `isFraud` label column is ignored during scoring. Additional columns are ignored, but missing model features and unsupported file types are rejected with an API validation error. Uploads are limited to 50 MB and 100,000 rows. Results include scores for the top 250 rows, risk-band counts for the full batch, and a fraud-risk rate; evaluation metrics such as AUC are not inferred from unlabeled uploads.
 
 ## Risk Report
 

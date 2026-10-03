@@ -196,7 +196,6 @@ class TransactionFeature(Base):
     beneficiary_novelty = Column(Boolean)
     hour_of_day = Column(Integer)
 
-    # Can be changed to JSON if you want DB-level JSON support
     extra_features = Column(Text)
 
     computed_at = Column(DateTime, default=datetime.utcnow, nullable=False)

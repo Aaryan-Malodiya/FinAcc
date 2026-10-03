@@ -1,76 +1,86 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, FileSpreadsheet, Trash2, UploadCloud, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Panel } from '../components/ui/Panel'
 import { Button } from '../components/ui/Button'
+import { formatFileSize, latestRiskReportKey, scoreTransactions } from '../api/fraud'
+import type { ScoredBatchReport } from '../types/finance'
 
-type Phase = 'idle' | 'ready' | 'preprocessing' | 'scoring' | 'complete'
+type Phase = 'idle' | 'ready' | 'processing' | 'complete'
 
 const steps = [
   { key: 'parse', label: 'Parsing CSV rows' },
-  { key: 'schema', label: 'Validating schema against ledger contract' },
-  { key: 'features', label: 'Engineering features (velocity, z-score, novelty)' },
-  { key: 'score', label: 'Scoring with xgboost-v4.2.1' }
+  { key: 'schema', label: 'Validating the 393 IEEE-CIS model features' },
+  { key: 'features', label: 'Preparing categorical and numeric values' },
+  { key: 'score', label: 'Scoring with the trained XGBoost model' }
 ]
-
-interface UploadedFile {
-  name: string
-  size: string
-  rows: number
-}
 
 export function FraudDetection() {
   const navigate = useNavigate()
+  const [latestReport, setLatestReport] = useState<ScoredBatchReport | null>(() => {
+    const saved = sessionStorage.getItem(latestRiskReportKey)
+    if (!saved) return null
+    try {
+      return JSON.parse(saved) as ScoredBatchReport
+    } catch {
+      return null
+    }
+  })
   const [phase, setPhase] = useState<Phase>('idle')
   const [dragging, setDragging] = useState(false)
-  const [file, setFile] = useState<UploadedFile | null>(null)
-  const [progress, setProgress] = useState(0)
+  const [file, setFile] = useState<File | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (phase !== 'preprocessing' && phase !== 'scoring') return
-    const timer = window.setInterval(() => {
-      setProgress((p) => {
-        const next = p + 2.5
-        if (next >= 60 && phase === 'preprocessing') setPhase('scoring')
-        if (next >= 100) {
-          window.clearInterval(timer)
-          setPhase('complete')
-          return 100
-        }
-        return next
-      })
-    }, 60)
-    return () => window.clearInterval(timer)
-  }, [phase])
-
-  const accept = (name: string) => {
-    setFile({
-      name: name.endsWith('.csv') ? name : `${name.replace(/\.[^.]+$/, '')}.csv`,
-      size: '4.2 MB',
-      rows: 18432
-    })
+  const accept = (selectedFile?: File) => {
+    if (!selectedFile) return
+    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
+      setFile(null)
+      setPhase('idle')
+      setError('The XGBoost model accepts CSV files only.')
+      return
+    }
+    if (selectedFile.size > 50 * 1024 * 1024) {
+      setFile(null)
+      setPhase('idle')
+      setError('Choose a CSV file that is 50 MB or smaller.')
+      return
+    }
+    setError(null)
+    setFile(selectedFile)
     setPhase('ready')
-    setProgress(0)
   }
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
-    const dropped = e.dataTransfer.files?.[0]
-    accept(dropped ? dropped.name : 'transactions_aug_w1.csv')
+    accept(e.dataTransfer.files?.[0])
   }
 
-  const activeStep =
-    progress >= 85 ? 3 : progress >= 60 ? 2 : progress >= 30 ? 1 : progress > 0 ? 0 : -1
+  const runDetection = async () => {
+    if (!file || phase !== 'ready') return
+    setError(null)
+    setPhase('processing')
+    try {
+      const report = await scoreTransactions(file)
+      sessionStorage.setItem(latestRiskReportKey, JSON.stringify(report))
+      setLatestReport(report)
+      setPhase('complete')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not score this CSV.')
+      setPhase('ready')
+    }
+  }
+
+  const activeStep = phase === 'processing' ? 2 : phase === 'complete' ? 4 : -1
 
   return (
     <>
       <PageHeader
         eyebrow="Fraud detection"
         title="Batch upload & scoring"
-        description="Submit a transaction batch for preprocessing and scoring. Files are validated against the ledger schema before the model runs."
+        description="Upload IEEE-CIS transaction data to validate its model features and score it with the trained XGBoost model."
       />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
@@ -97,14 +107,14 @@ export function FraudDetection() {
                   Drop a transaction file here
                 </p>
                 <p className="mt-1 text-[12px] text-paper-muted">
-                  CSV or XLSX up to 50 MB · schema: id, date, amount, account, channel, counterparty
+                  IEEE-CIS transaction CSV up to 50 MB · 393 model features · optional isFraud label is ignored
                 </p>
                 <input
                   ref={inputRef}
                   type="file"
-                  accept=".csv,.xlsx"
+                  accept=".csv,text/csv"
                   className="sr-only"
-                  onChange={(e) => accept(e.target.files?.[0]?.name ?? 'transactions_aug_w1.csv')}
+                  onChange={(e) => accept(e.target.files?.[0])}
                 />
                 <Button className="mt-5" onClick={() => inputRef.current?.click()} type="button">
                   Select file
@@ -119,7 +129,7 @@ export function FraudDetection() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-mono text-[13px] text-paper-ink">{file.name}</p>
                     <p className="tabular font-mono text-[11px] text-paper-muted">
-                      {file.rows.toLocaleString()} rows · {file.size} · uploaded 09:28 UTC
+                      {formatFileSize(file.size)} · ready to upload
                     </p>
                   </div>
                   {phase === 'ready' && (
@@ -128,7 +138,7 @@ export function FraudDetection() {
                       onClick={() => {
                         setFile(null)
                         setPhase('idle')
-                        setProgress(0)
+                        setError(null)
                       }}
                       aria-label="Remove file"
                       className="flex h-8 w-8 items-center justify-center rounded-sm text-paper-muted transition-colors hover:bg-risk-bg hover:text-risk"
@@ -143,6 +153,11 @@ export function FraudDetection() {
                   )}
                 </div>
               </div>
+            )}
+            {error && (
+              <p role="alert" className="mt-3 text-[12px] text-risk">
+                {error}
+              </p>
             )}
           </Panel>
 
@@ -186,32 +201,31 @@ export function FraudDetection() {
                 <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper-muted">
                   {phase === 'complete'
                     ? 'Run complete'
-                    : phase === 'scoring'
-                      ? 'Scoring'
-                      : phase === 'preprocessing'
-                        ? 'Preprocessing'
-                        : 'Awaiting run'}
+                    : phase === 'processing'
+                      ? 'Uploading and scoring'
+                      : 'Awaiting run'}
                 </span>
-                <span className="tabular font-mono text-[13px] text-paper-ink">
-                  {Math.round(progress)}%
+                <span className="font-mono text-[11px] text-paper-ink">
+                  {phase === 'processing' ? 'FastAPI · XGBoost' : phase === 'complete' ? '100%' : 'Ready'}
                 </span>
               </div>
               <div
                 role="progressbar"
-                aria-valuenow={Math.round(progress)}
-                aria-valuemin={0}
-                aria-valuemax={100}
+                aria-label="Model scoring progress"
+                aria-valuetext={phase === 'processing' ? 'Uploading and scoring' : phase}
+                aria-busy={phase === 'processing'}
                 className="h-1.5 w-full overflow-hidden rounded-full bg-paper-border"
               >
                 <div
-                  className="h-full rounded-full bg-brass transition-[width] duration-100"
-                  style={{ width: `${progress}%` }}
+                  className={`h-full rounded-full bg-brass transition-[width] duration-300 ${
+                    phase === 'processing' ? 'w-2/3 animate-pulse' : phase === 'complete' ? 'w-full' : 'w-0'
+                  }`}
                 />
               </div>
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-[11px] text-paper-muted">
-                  Model xgboost-v4.2.1 · 214 features · threshold 0.40
+                  XGBoost · IEEE-CIS transaction model · review threshold 40/100
                 </p>
                 {phase === 'complete' ? (
                   <div className="flex items-center gap-3">
@@ -221,7 +235,7 @@ export function FraudDetection() {
                       onClick={() => {
                         setFile(null)
                         setPhase('idle')
-                        setProgress(0)
+                        setError(null)
                       }}
                     >
                       <X size={13} /> Start over
@@ -231,15 +245,8 @@ export function FraudDetection() {
                     </Button>
                   </div>
                 ) : (
-                  <Button
-                    type="button"
-                    disabled={phase !== 'ready'}
-                    onClick={() => {
-                      setProgress(0)
-                      setPhase('preprocessing')
-                    }}
-                  >
-                    Run detection
+                  <Button type="button" disabled={phase !== 'ready'} onClick={runDetection}>
+                    {phase === 'processing' ? 'Scoring…' : 'Run detection'}
                   </Button>
                 )}
               </div>
@@ -251,13 +258,13 @@ export function FraudDetection() {
           <Panel tone="light" eyebrow="Contract" title="Expected columns">
             <ul className="divide-y divide-paper-border">
               {[
-                ['transaction_id', 'string'],
-                ['posted_at', 'ISO 8601'],
-                ['amount', 'decimal(14,2)'],
-                ['account_code', 'string'],
-                ['counterparty', 'string'],
-                ['channel', 'enum'],
-                ['country', 'ISO 3166']
+                ['TransactionID', 'identifier'],
+                ['TransactionDT', 'dataset time offset'],
+                ['TransactionAmt', 'numeric'],
+                ['ProductCD', 'categorical'],
+                ['card1–card6', 'categorical / numeric'],
+                ['C1–C14, D1–D15', 'numeric features'],
+                ['V1–V339', 'numeric features']
               ].map(([col, type]) => (
                 <li key={col} className="flex items-center justify-between py-2">
                   <span className="font-mono text-[12px] text-paper-ink">{col}</span>
@@ -267,21 +274,18 @@ export function FraudDetection() {
             </ul>
           </Panel>
 
-          <Panel eyebrow="History" title="Recent batches" bodyClassName="px-0 py-0">
-            <ul className="divide-y divide-paper-border">
-              {[
-                ['BATCH-2026-08-07-A', '18,432', '264'],
-                ['BATCH-2026-08-04-B', '15,109', '198'],
-                ['BATCH-2026-07-31-A', '21,660', '311']
-              ].map(([id, rows, flagged]) => (
-                <li key={id} className="px-5 py-3">
-                  <p className="font-mono text-[12px] text-paper-ink">{id}</p>
-                  <p className="tabular mt-0.5 font-mono text-[11px] text-paper-muted">
-                    {rows} scanned · <span className="text-risk">{flagged} flagged</span>
-                  </p>
-                </li>
-              ))}
-            </ul>
+          <Panel eyebrow="Latest result" title="Scored batch" bodyClassName="px-0 py-0">
+            {latestReport ? (
+              <div className="px-5 py-3">
+                <p className="font-mono text-[12px] text-paper-ink">{latestReport.summary.batchId}</p>
+                <p className="tabular mt-0.5 font-mono text-[11px] text-paper-muted">
+                  {latestReport.summary.scanned.toLocaleString()} scanned ·{' '}
+                  <span className="text-risk">{latestReport.summary.flagged.toLocaleString()} flagged</span>
+                </p>
+              </div>
+            ) : (
+              <p className="px-5 py-3 text-[12px] text-paper-muted">No batch scored in this session.</p>
+            )}
           </Panel>
         </div>
       </div>

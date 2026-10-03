@@ -29,6 +29,32 @@ export interface FlaggedTransaction {
   features: { label: string; value: string; weight: number }[]
 }
 
+export interface RiskDistributionBand {
+  band: string
+  count: number
+  level: RiskLevel
+}
+
+export interface RiskBatchSummary {
+  batchId: string
+  fileName: string
+  scanned: number
+  flagged: number
+  flaggedAmount: number
+  modelVersion: string
+  runtimeSeconds: number
+  completedAt: string
+  auc?: number
+  precision?: number
+  recall?: number
+}
+
+export interface ScoredBatchReport {
+  summary: RiskBatchSummary
+  flaggedTransactions: FlaggedTransaction[]
+  riskDistribution: RiskDistributionBand[]
+}
+
 export interface ActivityEntry {
   id: string
   time: string
