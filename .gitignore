@@ -1,1 +1,5 @@
 venvington-I/ 
+__pycache__/
+*.pyc
+.env
+.venv/
