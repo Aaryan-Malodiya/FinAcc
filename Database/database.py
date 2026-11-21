@@ -19,10 +19,11 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import URL
+from pathlib import Path
 
 from Database.Schema.Schema import Base
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 DB_USER = os.environ["DB_USER"]
 DB_PASSWORD = os.environ["DB_PASSWORD"]
@@ -69,6 +70,8 @@ LEFT JOIN risk_scores rs
 def init_db():
     """Create all tables (if they don't exist) and the transaction_feed view."""
     Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text(CREATE_TRANSACTION_FEED_VIEW))
 
 
 def get_session():

@@ -4,6 +4,7 @@ export type TransactionStatus = 'posted' | 'pending' | 'flagged'
 
 export interface Transaction {
   id: string
+  reference?: string
   date: string
   description: string
   account: string
@@ -11,8 +12,8 @@ export interface Transaction {
   creditAccount: string
   amount: number
   status: TransactionStatus
-  risk: RiskLevel
-  riskScore: number
+  risk: RiskLevel | null
+  riskScore: number | null
 }
 
 export interface FlaggedTransaction {
@@ -53,6 +54,7 @@ export interface ScoredBatchReport {
   summary: RiskBatchSummary
   flaggedTransactions: FlaggedTransaction[]
   riskDistribution: RiskDistributionBand[]
+  warnings?: string[]
 }
 
 export interface ActivityEntry {

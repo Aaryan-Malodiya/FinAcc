@@ -86,6 +86,16 @@ export function RiskReport() {
         }
       />
 
+      {liveReport?.warnings?.map((warning) => (
+        <p
+          key={warning}
+          role="alert"
+          className="mb-4 rounded-sm border border-watch/30 bg-watch-bg px-4 py-3 text-[12px] text-watch"
+        >
+          {warning}
+        </p>
+      ))}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total scanned"

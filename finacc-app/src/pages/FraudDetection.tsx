@@ -11,7 +11,7 @@ type Phase = 'idle' | 'ready' | 'processing' | 'complete'
 
 const steps = [
   { key: 'parse', label: 'Parsing CSV rows' },
-  { key: 'schema', label: 'Validating the 393 IEEE-CIS model features' },
+  { key: 'schema', label: 'Validating the 438 IEEE-CIS model features' },
   { key: 'features', label: 'Preparing categorical and numeric values' },
   { key: 'score', label: 'Scoring with the trained XGBoost model' }
 ]
@@ -80,7 +80,7 @@ export function FraudDetection() {
       <PageHeader
         eyebrow="Fraud detection"
         title="Batch upload & scoring"
-        description="Upload IEEE-CIS transaction data to validate its model features and score it with the trained XGBoost model."
+        description="Upload IEEE-CIS transaction data to validate its model features and score it with the trained XGBoost model. The bundled synthetic sample is supported with an approximate-score warning."
       />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
@@ -107,7 +107,7 @@ export function FraudDetection() {
                   Drop a transaction file here
                 </p>
                 <p className="mt-1 text-[12px] text-paper-muted">
-                  IEEE-CIS transaction CSV up to 50 MB · 393 model features · optional isFraud label is ignored
+                  IEEE-CIS transaction CSV up to 50 MB · 438 model features · optional isFraud label is ignored
                 </p>
                 <input
                   ref={inputRef}

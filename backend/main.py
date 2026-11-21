@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import io
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +17,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from backend.accounting import initialize_demo_database, router as accounting_router
+
 MODEL_PATH = (
     ROOT_DIR
     / "Models"
@@ -43,8 +50,15 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+app.include_router(accounting_router)
+
+
+@app.on_event("startup")
+def initialize_accounting() -> None:
+    initialize_demo_database()
 
 _model: Any | None = None
+_category_values: dict[str, list[Any]] | None = None
 
 
 def load_model() -> Any:
@@ -57,6 +71,116 @@ def load_model() -> Any:
         except Exception as exc:
             raise HTTPException(status_code=503, detail="The trained fraud model could not be loaded.") from exc
     return _model
+
+
+def _get_model_category_values(model: Any) -> dict[str, list[Any]]:
+    global _category_values
+    if _category_values is None:
+        try:
+            exported = model.get_booster().get_categories(export_to_arrow=True).to_arrow()
+        except ImportError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Categorical model metadata is unavailable for synthetic CSV compatibility.",
+            ) from exc
+        _category_values = {
+            name: values.to_pylist()
+            for name, values in exported
+            if values is not None
+        }
+    return _category_values
+
+
+def _prepare_mock_features(frame: pd.DataFrame, model: Any) -> tuple[pd.DataFrame, list[str]]:
+    expected = [str(name) for name in model.feature_names_in_]
+    if not {"FraudScenario", "CaseNotes"}.issubset(frame.columns):
+        return frame, []
+
+    missing = {name for name in expected if name not in frame.columns}
+    identity_features = {f"id_{index:02}" for index in range(1, 39)}
+    derived_features = {
+        "DeviceType",
+        "DeviceInfo",
+        "user_id",
+        "user_average_transaction_amount",
+        "user_spending_std",
+        "current_transaction_to_user_average_ratio",
+        "current_transaction_to_user_std_ratio",
+    }
+    supported_missing = identity_features | derived_features
+    if not missing or not missing.issubset(supported_missing):
+        return frame, []
+
+    prepared = frame.copy()
+    feature_types = model.get_booster().feature_types or []
+    categorical_names = {
+        name
+        for index, name in enumerate(expected)
+        if index < len(feature_types) and feature_types[index] == "c"
+    }
+    missing_categorical = missing & categorical_names
+    model_categories = _get_model_category_values(model) if missing_categorical else {}
+    unavailable_categories = missing_categorical - model_categories.keys()
+    if unavailable_categories:
+        raise HTTPException(
+            status_code=503,
+            detail="The trained model is missing category metadata required for synthetic CSV compatibility.",
+        )
+
+    def missing_feature(name: str) -> pd.Series | pd.Categorical:
+        if name in categorical_names:
+            return pd.Categorical([None] * len(prepared), categories=model_categories[name])
+        return pd.Series(np.nan, index=prepared.index)
+
+    user_group_keys: pd.Series | None = None
+    for name in missing & identity_features:
+        prepared[name] = missing_feature(name)
+    for name in missing & {"DeviceType", "DeviceInfo"}:
+        prepared[name] = missing_feature(name)
+
+    if "user_id" in missing:
+        card1 = prepared["card1"].fillna("").astype(str)
+        card2 = pd.to_numeric(prepared["card2"], errors="coerce").astype("float64").astype(str)
+        addr1 = pd.to_numeric(prepared["addr1"], errors="coerce").astype("float64").astype(str)
+        combined = card1 + "_" + card2 + "_" + addr1
+        user_ids = combined.map(lambda value: hashlib.md5(value.encode()).hexdigest())
+        user_group_keys = user_ids
+        prepared["user_id"] = pd.Categorical(
+            user_ids,
+            categories=model_categories["user_id"],
+        )
+
+    if "user_average_transaction_amount" in missing or "user_spending_std" in missing:
+        amounts = pd.to_numeric(prepared["TransactionAmt"], errors="coerce")
+        user_groups = user_group_keys if user_group_keys is not None else prepared["user_id"]
+        if "user_average_transaction_amount" in missing:
+            prepared["user_average_transaction_amount"] = amounts.groupby(
+                user_groups, observed=False
+            ).transform("mean").astype(np.float32)
+        if "user_spending_std" in missing:
+            prepared["user_spending_std"] = (
+                amounts.groupby(user_groups, observed=False).transform("std").fillna(0).astype(np.float32)
+            )
+
+    if "current_transaction_to_user_average_ratio" in missing:
+        prepared["current_transaction_to_user_average_ratio"] = (
+            pd.to_numeric(prepared["TransactionAmt"], errors="coerce")
+            / prepared["user_average_transaction_amount"]
+        ).astype(np.float32)
+    if "current_transaction_to_user_std_ratio" in missing:
+        user_std = prepared["user_spending_std"]
+        prepared["current_transaction_to_user_std_ratio"] = np.where(
+            user_std != 0,
+            pd.to_numeric(prepared["TransactionAmt"], errors="coerce") / user_std,
+            0,
+        ).astype(np.float32)
+
+    warnings = [
+        "Synthetic compatibility mode: identity and device features were unavailable and set to missing. "
+        "User statistics were calculated from this upload only, so these risk scores are approximate "
+        "and must not be used for real fraud decisions."
+    ]
+    return prepared, warnings
 
 
 def _feature_frame(frame: pd.DataFrame, model: Any) -> pd.DataFrame:
@@ -163,6 +287,7 @@ async def score_csv(file: UploadFile = File(...)) -> dict[str, Any]:
 
     started_at = time.perf_counter()
     model = load_model()
+    frame, warnings = _prepare_mock_features(frame, model)
     features = _feature_frame(frame, model)
     try:
         probabilities = model.predict_proba(features)[:, 1]
@@ -228,4 +353,5 @@ async def score_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         },
         "flaggedTransactions": report_rows,
         "riskDistribution": distribution,
+        "warnings": warnings,
     }

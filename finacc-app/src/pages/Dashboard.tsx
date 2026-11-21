@@ -143,7 +143,7 @@ export function Dashboard() {
                   {formatCurrency(t.amount)}
                 </td>
                 <td className="px-5 py-3 text-right">
-                  <RiskPill level={t.risk} />
+                  <RiskPill level={t.risk ?? 'clean'} />
                 </td>
               </tr>
             ))}

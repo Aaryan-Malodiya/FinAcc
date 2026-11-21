@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Search } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Panel } from '../components/ui/Panel'
 import { RiskPill, StatusPill } from '../components/ui/RiskPill'
 import { TimeRangeFilter } from '../components/ui/TimeRangeFilter'
-import { transactions } from '../data/transactions'
+import { fetchLedgerEntries } from '../api/accounting'
 import { formatCurrency } from '../utils/format'
 import type { Transaction } from '../types/finance'
 
@@ -12,8 +12,6 @@ type SortKey = 'id' | 'date' | 'amount' | 'riskScore'
 type Dir = 'asc' | 'desc'
 
 const statusFilters = ['all', 'posted', 'pending', 'flagged'] as const
-const referenceDate = new Date(Math.max(...transactions.map((t) => new Date(t.date).getTime())))
-
 const columns: { key: SortKey | null; label: string; align?: 'right' }[] = [
   { key: 'id', label: 'Entry' },
   { key: 'date', label: 'Date' },
@@ -25,12 +23,25 @@ const columns: { key: SortKey | null; label: string; align?: 'right' }[] = [
 ]
 
 export function Ledger() {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [dir, setDir] = useState<Dir>('desc')
   const [status, setStatus] = useState<(typeof statusFilters)[number]>('all')
   const [query, setQuery] = useState('')
   const [range, setRange] = useState('30d')
   const rangeDays = { '30d': 30, '60d': 60, '90d': 90 }[range] ?? 30
+  const referenceDate = useMemo(() => new Date(), [])
+
+  useEffect(() => {
+    fetchLedgerEntries()
+      .then(setTransactions)
+      .catch((error: unknown) => {
+        setLoadError(error instanceof Error ? error.message : 'Could not load ledger entries.')
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
   const rows = useMemo(() => {
     const cutoff = new Date(referenceDate)
@@ -42,6 +53,7 @@ export function Ledger() {
       const matchesQuery =
         !q ||
         t.id.toLowerCase().includes(q) ||
+        t.reference?.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
         t.account.toLowerCase().includes(q)
       return matchesStatus && matchesRange && matchesQuery
@@ -54,9 +66,11 @@ export function Ledger() {
         : String(av).localeCompare(String(bv))
       return dir === 'asc' ? cmp : -cmp
     })
-  }, [sortKey, dir, status, query, rangeDays])
+  }, [transactions, sortKey, dir, status, query, rangeDays])
 
   const total = rows.reduce((sum, t) => sum + t.amount, 0)
+  const scoredCount = rows.filter((transaction) => transaction.riskScore !== null).length
+  const highRiskCount = rows.filter((transaction) => transaction.risk === 'high').length
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) setDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -71,7 +85,7 @@ export function Ledger() {
       <PageHeader
         eyebrow="Recording & maintenance"
         title="General ledger"
-        description="All recorded entries for the open period, with the detection score attached to each line."
+        description="Journal entries saved to the general ledger, with risk scores shown when available."
       />
 
       <Panel bodyClassName="px-0 py-0">
@@ -102,7 +116,7 @@ export function Ledger() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filter by ID, description, account"
+              placeholder="Filter by ID, reference, description, account"
               aria-label="Filter ledger"
               className="h-9 w-72 rounded-sm border border-paper-border bg-paper-light pl-8 pr-3 font-mono text-[12px] text-paper-ink placeholder:text-paper-muted/70 focus:border-brass focus:outline-none focus:ring-1 focus:ring-brass"
             />
@@ -143,7 +157,12 @@ export function Ledger() {
             <tbody className="divide-y divide-paper-border">
               {rows.map((t) => (
                 <tr key={t.id} className="transition-colors hover:bg-paper-light">
-                  <td className="tabular px-5 py-3 font-mono text-xs text-paper-ink">{t.id}</td>
+                  <td className="tabular px-5 py-3 font-mono text-xs text-paper-ink">
+                    <p>{t.id}</p>
+                    {t.reference && (
+                      <p className="mt-1 text-[10px] text-paper-muted">{t.reference}</p>
+                    )}
+                  </td>
                   <td className="tabular px-5 py-3 font-mono text-xs text-paper-muted">{t.date}</td>
                   <td className="px-5 py-3 text-[13px] text-paper-ink">{t.description}</td>
                   <td className="px-5 py-3">
@@ -163,7 +182,7 @@ export function Ledger() {
                             : 'text-paper-muted'
                       }
                     >
-                      {String(t.riskScore).padStart(2, '0')}
+                      {t.riskScore === null ? '—' : String(t.riskScore).padStart(2, '0')}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -171,13 +190,31 @@ export function Ledger() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
+              {!loading && !loadError && rows.length === 0 && (
                 <tr>
                   <td colSpan={columns.length} className="px-5 py-12 text-center">
-                    <p className="font-display text-lg text-paper-ink">No entries match</p>
-                    <p className="mt-1 text-[12px] text-paper-muted">
-                      Adjust the filter or clear the search term.
+                    <p className="font-display text-lg text-paper-ink">
+                      {transactions.length ? 'No entries match' : 'No ledger entries yet'}
                     </p>
+                    <p className="mt-1 text-[12px] text-paper-muted">
+                      {transactions.length
+                        ? 'Adjust the filter or clear the search term.'
+                        : 'Posted journal entries will appear here.'}
+                    </p>
+                  </td>
+                </tr>
+              )}
+              {loading && (
+                <tr>
+                  <td colSpan={columns.length} className="px-5 py-12 text-center text-[12px] text-paper-muted">
+                    Loading ledger entries…
+                  </td>
+                </tr>
+              )}
+              {loadError && (
+                <tr>
+                  <td colSpan={columns.length} className="px-5 py-12 text-center text-[12px] text-risk">
+                    Could not load ledger entries: {loadError}
                   </td>
                 </tr>
               )}
@@ -197,8 +234,8 @@ export function Ledger() {
               {formatCurrency(total)}
             </span>
             <RiskPill
-              level={rows.some((r) => r.risk === 'high') ? 'high' : 'clean'}
-              label={`${rows.filter((r) => r.risk === 'high').length} high risk`}
+              level={highRiskCount ? 'high' : 'clean'}
+              label={scoredCount ? `${highRiskCount} high risk` : 'Not scored'}
             />
           </div>
         </div>

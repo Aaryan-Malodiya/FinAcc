@@ -1,0 +1,67 @@
+{
+  "dataset": {
+    "transaction_csv": "C:\\Datasets\\ieee-fraud-detection\\train_transaction.csv",
+    "identity_csv": "C:\\Datasets\\ieee-fraud-detection\\train_identity.csv",
+    "labeled_rows": 590540,
+    "feature_count": 432,
+    "numeric_feature_count": 401,
+    "categorical_feature_count": 31,
+    "class_counts": {
+      "0": 569877,
+      "1": 20663
+    }
+  },
+  "validation": {
+    "test_size": 0.2,
+    "random_state": 420,
+    "metrics_file": "validation_metrics.csv",
+    "completed_models": [
+      "Logistic Regression",
+      "Random Forest",
+      "Extra Trees",
+      "CatBoost",
+      "XGBoost",
+      "MLP"
+    ]
+  },
+  "full_data_refits": {
+    "Logistic Regression": {
+      "artifact": "logistic_regression_full.joblib",
+      "rows": 590540,
+      "elapsed_seconds": 127.31
+    },
+    "Random Forest": {
+      "artifact": "random_forest_full.joblib",
+      "rows": 590540,
+      "elapsed_seconds": 188.36
+    },
+    "Extra Trees": {
+      "artifact": "extra_trees_full.joblib",
+      "rows": 590540,
+      "elapsed_seconds": 316.3
+    },
+    "CatBoost": {
+      "artifact": "catboost_full.joblib",
+      "rows": 590540,
+      "elapsed_seconds": 343.4
+    },
+    "XGBoost": {
+      "artifact": "xgboost_full.joblib",
+      "rows": 590540,
+      "elapsed_seconds": 194.66
+    },
+    "MLP": {
+      "artifact": "mlp_full.joblib",
+      "rows": 590540,
+      "elapsed_seconds": 159.07
+    }
+  },
+  "resource_settings": {
+    "max_workers": 2,
+    "forest_estimators": 100,
+    "forest_max_depth": 16,
+    "forest_min_samples_leaf": 3,
+    "mlp_max_iter": 200
+  },
+  "total_elapsed_seconds": 2575.23
+}

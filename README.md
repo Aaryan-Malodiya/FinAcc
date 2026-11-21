@@ -48,7 +48,7 @@ The fraud detection module is used to analyse transaction batches.
 
 The main features include:
 
-- Upload CSV or XLSX transaction files
+- Upload IEEE-CIS transaction CSV files
 - Validate uploaded file structure
 - Clean and preprocess transaction data
 - Perform feature engineering
@@ -125,6 +125,16 @@ Some of the important feature groups in the dataset include:
 - `id_01`–`id_38`
 
 The transaction and identity tables are joined using `TransactionID`.
+
+### Full-Dataset Model Comparison
+
+The comparison notebook uses a small synthetic CSV for demonstration. To train its six classifiers on the labeled IEEE-CIS training data instead, run from the repository root:
+
+```powershell
+python Models\Scripts\train_model_comparison.py --data-dir C:\Datasets\ieee-fraud-detection
+```
+
+The script joins `train_transaction.csv` with `train_identity.csv`, evaluates each model on the same stratified 20% holdout, then refits each model on all labeled training rows. Validation metrics and the refitted pipelines are saved under `Models/Model_Data/IEEE_CIS_Comparison/`. The official `test_transaction.csv` has no fraud labels and is not used for supervised training or evaluation. The existing production XGBoost artifact is left unchanged. To keep the full-data run within typical workstation memory, forest sizes/depths, MLP iterations, and parallel workers are bounded; see the generated manifest for those settings.
 
 
 ## Technology Stack
@@ -251,6 +261,8 @@ npm run dev
 
 The frontend proxies `/api` requests to `http://127.0.0.1:8000`. API health and interactive docs are available at `/api/health` and `/docs` on the API server.
 
+On API startup, FinAcc creates the database tables and `transaction_feed` view, then adds any missing demo chart-of-accounts records, demo user, and an open period (the current calendar year if none exists). Journal entries are saved in `ledger_entries` and can be read from the General Ledger screen. References must be unique. Entries above $50,000 are saved as pending approval; journal-entry risk scoring and authentication are not implemented yet. Keep this demo backend on a trusted local environment.
+
 ### Running the Model Pipeline
 
 ```bash
@@ -263,12 +275,12 @@ python evaluate.py
 
 ## Transaction Upload Format
 
-The fraud detection screen accepts IEEE-CIS transaction data in CSV format. The trained XGBoost artifact requires its complete 393-feature transaction schema, including fields such as:
+The fraud detection screen accepts IEEE-CIS transaction data in CSV format. The trained XGBoost artifact requires its complete 438-feature schema, including fields such as:
 
 - `TransactionID`, `TransactionDT`, `TransactionAmt`, and `ProductCD`
 - Card, address, distance, email, count, day, and `V`-series features from the IEEE-CIS transaction table
 
-An optional `isFraud` label column is ignored during scoring. Additional columns are ignored, but missing model features and unsupported file types are rejected with an API validation error. Uploads are limited to 50 MB and 100,000 rows. Results include scores for the top 250 rows, risk-band counts for the full batch, and a fraud-risk rate; evaluation metrics such as AUC are not inferred from unlabeled uploads.
+An optional `isFraud` label column is ignored during scoring. Additional columns are ignored, but missing model features and unsupported file types are rejected with an API validation error. The bundled synthetic mock CSV is a documented exception: when it contains its `FraudScenario` and `CaseNotes` marker columns, the API supplies unavailable identity/device values as missing and derives the same card-based user features used by training. Because its identity data is synthetic and user statistics come only from the uploaded batch, its scores are approximate and must not be used for real fraud decisions. Uploads are limited to 50 MB and 100,000 rows. Results include scores for the top 250 rows, risk-band counts for the full batch, and a fraud-risk rate; evaluation metrics such as AUC are not inferred from unlabeled uploads.
 
 ## Risk Report
 
