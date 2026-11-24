@@ -41,10 +41,10 @@ export function FraudDetection() {
       setError('The XGBoost model accepts CSV files only.')
       return
     }
-    if (selectedFile.size > 50 * 1024 * 1024) {
+    if (selectedFile.size > 15 * 1024 * 1024) {
       setFile(null)
       setPhase('idle')
-      setError('Choose a CSV file that is 50 MB or smaller.')
+      setError('Choose a CSV file that is 15 MB or smaller.')
       return
     }
     setError(null)
@@ -107,7 +107,7 @@ export function FraudDetection() {
                   Drop a transaction file here
                 </p>
                 <p className="mt-1 text-[12px] text-paper-muted">
-                  IEEE-CIS transaction CSV up to 50 MB · 438 model features · optional isFraud label is ignored
+                  IEEE-CIS transaction CSV up to 15 MB · 438 model features · optional isFraud label is ignored
                 </p>
                 <input
                   ref={inputRef}

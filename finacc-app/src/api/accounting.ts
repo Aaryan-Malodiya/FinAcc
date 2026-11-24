@@ -1,4 +1,5 @@
 import type { Transaction } from '../types/finance'
+import { API_BASE_URL } from './config'
 
 export interface AccountOption {
   code: string
@@ -29,7 +30,7 @@ interface LedgerEntryResponse {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await fetch(`${API_BASE_URL}${url}`, init)
   if (!response.ok) {
     let message = `Request failed (${response.status}).`
     try {

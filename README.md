@@ -280,7 +280,23 @@ The fraud detection screen accepts IEEE-CIS transaction data in CSV format. The 
 - `TransactionID`, `TransactionDT`, `TransactionAmt`, and `ProductCD`
 - Card, address, distance, email, count, day, and `V`-series features from the IEEE-CIS transaction table
 
-An optional `isFraud` label column is ignored during scoring. Additional columns are ignored, but missing model features and unsupported file types are rejected with an API validation error. The bundled synthetic mock CSV is a documented exception: when it contains its `FraudScenario` and `CaseNotes` marker columns, the API supplies unavailable identity/device values as missing and derives the same card-based user features used by training. Because its identity data is synthetic and user statistics come only from the uploaded batch, its scores are approximate and must not be used for real fraud decisions. Uploads are limited to 50 MB and 100,000 rows. Results include scores for the top 250 rows, risk-band counts for the full batch, and a fraud-risk rate; evaluation metrics such as AUC are not inferred from unlabeled uploads.
+An optional `isFraud` label column is ignored during scoring. Additional columns are ignored, but missing model features and unsupported file types are rejected with an API validation error. The bundled synthetic mock CSV is a documented exception: when it contains its `FraudScenario` and `CaseNotes` marker columns, the API supplies unavailable identity/device values as missing and derives the same card-based user features used by training. Because its identity data is synthetic and user statistics come only from the uploaded batch, its scores are approximate and must not be used for real fraud decisions. Uploads are limited to 15 MB and 100,000 rows. Results include scores for the top 250 rows, risk-band counts for the full batch, and a fraud-risk rate; evaluation metrics such as AUC are not inferred from unlabeled uploads.
+
+### Deploying the Backend to Vercel
+
+The backend can be deployed as a separate Vercel project from this repository. Set the backend project's Root Directory to the repository root; `pyproject.toml` points Vercel to `backend.main:app`, and `vercel.json` includes the trained model file in the Python function bundle. The Vercel dependency list is kept in `requirements-vercel.txt` to avoid installing training and notebook-only packages. Python is pinned to 3.14.
+
+Configure these backend environment variables in Vercel:
+
+- `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and optionally `DB_PORT` and `DB_NAME` for a remotely reachable MySQL database.
+- `FRONTEND_ORIGINS`: comma-separated exact origins of the deployed frontend, such as `https://finacc.example.com`. Add preview origins only if needed.
+- Leave `FINACC_RUN_DEMO_BOOTSTRAP` unset. Vercel instances do not create or seed database tables on startup; provision the schema and required demo/account rows once through a controlled setup process.
+
+In the existing frontend Vercel project, set `VITE_API_BASE_URL` to the backend's HTTPS origin (without a trailing slash), then redeploy the frontend. The Vite proxy remains in use locally when this variable is empty.
+
+Vercel Functions accept request bodies up to 20 MiB, so the CSV upload limit is 15 MiB to leave room for multipart encoding; the API still limits batches to 100,000 rows. Larger dataset uploads need object storage and asynchronous processing or a separately hosted backend. Keep the model bundle within Vercel's Python function size limit.
+
+**Security note:** the accounting API currently has no authentication and uses demo accounting behavior. Do not expose it publicly for real financial data until authentication, authorization, and production database initialization are implemented. Use a managed database with TLS, private networking or provider-supported connection pooling, backups, and least-privilege credentials.
 
 ## Risk Report
 

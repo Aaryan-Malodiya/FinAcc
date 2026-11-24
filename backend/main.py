@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import sys
 import time
 import uuid
@@ -30,7 +31,7 @@ MODEL_PATH = (
     / "Transaction_Module"
     / "XGB_Transactions_Model.pkl"
 )
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 MAX_ROWS = 100_000
 REPORT_ROW_LIMIT = 250
 RISK_BANDS = [
@@ -43,9 +44,17 @@ RISK_BANDS = [
 ]
 
 app = FastAPI(title="FinAcc Fraud Scoring API", version="1.0.0")
+frontend_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=frontend_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -55,7 +64,8 @@ app.include_router(accounting_router)
 
 @app.on_event("startup")
 def initialize_accounting() -> None:
-    initialize_demo_database()
+    if os.getenv("VERCEL") != "1" or os.getenv("FINACC_RUN_DEMO_BOOTSTRAP", "").lower() == "true":
+        initialize_demo_database()
 
 _model: Any | None = None
 _category_values: dict[str, list[Any]] | None = None
@@ -269,7 +279,7 @@ async def score_csv(file: UploadFile = File(...)) -> dict[str, Any]:
 
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(contents) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="CSV files must be 50 MB or smaller.")
+        raise HTTPException(status_code=413, detail="CSV files must be 15 MB or smaller.")
     if not contents:
         raise HTTPException(status_code=400, detail="The uploaded CSV is empty.")
 
