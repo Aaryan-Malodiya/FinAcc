@@ -31,7 +31,7 @@ MODEL_PATH = (
     / "Transaction_Module"
     / "XGB_Transactions_Model.pkl"
 )
-MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_ROWS = 100_000
 REPORT_ROW_LIMIT = 250
 RISK_BANDS = [
@@ -64,7 +64,17 @@ app.include_router(accounting_router)
 
 @app.on_event("startup")
 def initialize_accounting() -> None:
-    if os.getenv("VERCEL") != "1" or os.getenv("FINACC_RUN_DEMO_BOOTSTRAP", "").lower() == "true":
+    bootstrap_setting = os.getenv("FINACC_RUN_DEMO_BOOTSTRAP")
+    if bootstrap_setting is not None and bootstrap_setting.lower() not in {"true", "false"}:
+        raise RuntimeError("FINACC_RUN_DEMO_BOOTSTRAP must be 'true' or 'false'.")
+
+    is_managed_deployment = os.getenv("VERCEL") == "1" or bool(os.getenv("RAILWAY_ENVIRONMENT_NAME"))
+    should_bootstrap = (
+        bootstrap_setting.lower() == "true"
+        if bootstrap_setting is not None
+        else not is_managed_deployment
+    )
+    if should_bootstrap:
         initialize_demo_database()
 
 _model: Any | None = None
