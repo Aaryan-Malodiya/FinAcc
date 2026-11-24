@@ -292,10 +292,10 @@ Keep the frontend on Vercel and deploy the backend as a Railway service from the
 Configure these backend variables in the Railway service:
 
 - Either `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, and `DB_NAME`, or Railway MySQL's `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLHOST`, `MYSQLPORT`, and `MYSQLDATABASE`.
-- `FRONTEND_ORIGINS`: comma-separated exact origins of the deployed frontend, such as `https://finacc.example.com`. Add preview origins only if needed.
+- `FRONTEND_ORIGINS`: optional comma-separated exact additional origins. The production Vercel origin `https://fin-acc-steel.vercel.app` and local development origins are allowed by default. Add preview origins here if needed.
 - Leave `FINACC_RUN_DEMO_BOOTSTRAP` unset or set it to `false`. Railway instances skip schema creation and demo seeding by default. Provision the production schema and required rows once through a controlled setup process.
 
-After generating a public Railway domain, set `VITE_API_BASE_URL` in the existing frontend Vercel project to `https://<railway-domain>` (without a trailing slash), then redeploy the frontend. The Vite proxy remains in use locally when this variable is empty.
+The production frontend defaults to the current Railway API origin, `https://finacc-production-93fb533c.up.railway.app`. Set `VITE_API_BASE_URL` in Vercel only to override that origin, then redeploy the frontend. The Vite proxy remains in use locally when this variable is empty.
 
 The API accepts CSV uploads up to 50 MB and 100,000 rows. Larger uploads should use object storage and asynchronous processing.
 

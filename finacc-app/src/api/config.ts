@@ -1,4 +1,8 @@
-const configuredApiUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
+const productionApiUrl = 'https://finacc-production-93fb533c.up.railway.app'
+const configuredApiUrl = (
+  import.meta.env.VITE_API_BASE_URL?.trim()
+  || (import.meta.env.PROD ? productionApiUrl : '')
+).replace(/\/+$/, '')
 
 export const API_BASE_URL = configuredApiUrl.replace(/\/api$/i, '')
 

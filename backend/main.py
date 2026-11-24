@@ -44,17 +44,21 @@ RISK_BANDS = [
 ]
 
 app = FastAPI(title="FinAcc Fraud Scoring API", version="1.0.0")
-frontend_origins = [
+frontend_origins = {
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://fin-acc-steel.vercel.app",
+}
+frontend_origins.update(
     origin.strip().rstrip("/")
     for origin in os.getenv(
-        "FRONTEND_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
+        "FRONTEND_ORIGINS", ""
     ).split(",")
     if origin.strip()
-]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_origins,
+    allow_origins=sorted(frontend_origins),
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
