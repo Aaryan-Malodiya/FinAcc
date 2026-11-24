@@ -25,11 +25,25 @@ from Database.Schema.Schema import Base
 
 load_dotenv(Path(__file__).resolve().with_name(".env"))
 
-DB_USER = os.environ["DB_USER"]
-DB_PASSWORD = os.environ["DB_PASSWORD"]
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "3306")
-DB_NAME = os.getenv("DB_NAME", "finacc")
+is_managed_deployment = os.getenv("VERCEL") == "1" or bool(os.getenv("RAILWAY_ENVIRONMENT_NAME"))
+
+
+def _database_setting(name: str, railway_name: str, local_default: str | None = None) -> str:
+    value = os.getenv(name) or os.getenv(railway_name)
+    if value:
+        return value
+    if local_default is not None and not is_managed_deployment:
+        return local_default
+    raise RuntimeError(
+        f"Missing database setting: configure {name} or the Railway variable {railway_name}."
+    )
+
+
+DB_USER = _database_setting("DB_USER", "MYSQLUSER")
+DB_PASSWORD = _database_setting("DB_PASSWORD", "MYSQLPASSWORD")
+DB_HOST = _database_setting("DB_HOST", "MYSQLHOST", "localhost")
+DB_PORT = _database_setting("DB_PORT", "MYSQLPORT", "3306")
+DB_NAME = _database_setting("DB_NAME", "MYSQLDATABASE", "finacc")
 
 DATABASE_URL = URL.create("mysql+pymysql", username=DB_USER, password=DB_PASSWORD,
                             host=DB_HOST, port=int(DB_PORT), database=DB_NAME)

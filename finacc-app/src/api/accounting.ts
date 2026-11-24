@@ -1,5 +1,5 @@
 import type { Transaction } from '../types/finance'
-import { API_BASE_URL } from './config'
+import { apiUrl } from './config'
 
 export interface AccountOption {
   code: string
@@ -30,9 +30,12 @@ interface LedgerEntryResponse {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${url}`, init)
+  const requestUrl = apiUrl(url)
+  const response = await fetch(requestUrl, init)
   if (!response.ok) {
-    let message = `Request failed (${response.status}).`
+    let message = response.status === 404
+      ? `API endpoint not found at ${requestUrl}. Check that VITE_API_BASE_URL is the Railway service origin.`
+      : `Request failed (${response.status}).`
     try {
       const body = (await response.json()) as { detail?: string }
       if (body.detail) message = body.detail

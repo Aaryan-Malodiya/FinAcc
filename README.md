@@ -291,7 +291,7 @@ Keep the frontend on Vercel and deploy the backend as a Railway service from the
 
 Configure these backend variables in the Railway service:
 
-- `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and optionally `DB_PORT` and `DB_NAME` for a remotely reachable MySQL database.
+- Either `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, and `DB_NAME`, or Railway MySQL's `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLHOST`, `MYSQLPORT`, and `MYSQLDATABASE`.
 - `FRONTEND_ORIGINS`: comma-separated exact origins of the deployed frontend, such as `https://finacc.example.com`. Add preview origins only if needed.
 - Leave `FINACC_RUN_DEMO_BOOTSTRAP` unset or set it to `false`. Railway instances skip schema creation and demo seeding by default. Provision the production schema and required rows once through a controlled setup process.
 

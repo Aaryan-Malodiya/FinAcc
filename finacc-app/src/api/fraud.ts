@@ -1,5 +1,5 @@
 import type { ScoredBatchReport } from '../types/finance'
-import { API_BASE_URL } from './config'
+import { apiUrl } from './config'
 
 export const latestRiskReportKey = 'finacc.latestRiskReport'
 
@@ -7,10 +7,22 @@ export async function scoreTransactions(file: File): Promise<ScoredBatchReport> 
   const body = new FormData()
   body.append('file', file)
 
-  const response = await fetch(`${API_BASE_URL}/api/score`, { method: 'POST', body })
-  const payload = await response.json()
+  const requestUrl = apiUrl('/api/score')
+  const response = await fetch(requestUrl, { method: 'POST', body })
+  let payload: { detail?: string } | null = null
+  try {
+    payload = await response.json() as { detail?: string }
+  } catch {
+    if (response.ok) {
+      throw new Error('The scoring API returned an invalid response.')
+    }
+  }
   if (!response.ok) {
-    const detail = typeof payload.detail === 'string' ? payload.detail : 'Could not score this CSV.'
+    const detail = typeof payload?.detail === 'string'
+      ? payload.detail
+      : response.status === 404
+        ? `API endpoint not found at ${requestUrl}. Check that VITE_API_BASE_URL is the Railway service origin.`
+        : 'Could not score this CSV.'
     throw new Error(detail)
   }
   return payload as ScoredBatchReport
